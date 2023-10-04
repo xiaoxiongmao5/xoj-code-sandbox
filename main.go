@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/config"
+	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mydocker"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mylog"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/myresq"
 	_ "github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/routers"
@@ -15,11 +16,20 @@ import (
 func init() {
 	mylog.Log.Info("init begin: main")
 
+	var err error
+
+	// 创建Docker客户端
+	mydocker.Cli, err = mydocker.CreateDockerClient()
+	if err != nil {
+		panic(err)
+	}
+
 	mylog.Log.Info("init end  : main")
 }
 
 func main() {
 	defer mylog.Log.Writer().Close()
+	defer mydocker.Cli.Close()
 
 	// 启动配置文件加载协程
 	go config.LoadAppDynamicConfigCycle()
@@ -53,5 +63,6 @@ func main() {
 			ctx.Output.JSON(response, false, false)
 		}
 	}
+
 	beego.Run()
 }
