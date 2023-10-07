@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-04 16:33:26
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-04 20:38:03
+ * @LastEditTime: 2023-10-07 23:33:31
  */
 package controllers
 
@@ -10,16 +10,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	beego "github.com/beego/beego/v2/server/web"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/model"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mydocker"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mylog"
@@ -45,7 +43,7 @@ func (this DockerController) Do() {
 		args := os.Args[1:]
 		a, _ := strconv.Atoi(args[0])
 		b, _ := strconv.Atoi(args[1])
-		fmt.Printf("结果: %d", a+b)
+		fmt.Printf("%d", a+b)
 	}
 	`
 	inputList := []string{"2 2", "2 3"}
@@ -57,25 +55,19 @@ func (this DockerController) Do() {
 		return
 	}
 
+	ctx := context.Background()
 	cli := mydocker.Cli
 
 	userCodeParentPath := filepath.Dir(userCodePath)
 
-	// 创建并启动Docker容器
-	containerID, err := CreateAndStartContainer(cli, userCodeParentPath)
-	if err != nil {
-		mylog.Log.Error("创建并启动Docker容器失败, err=", err.Error())
-		return
-	}
-
-	// 编译代码
-	if err := CompileFileInDocker(cli, containerID); err != nil {
+	// 2. 编译代码
+	if err := CompileFileInDocker(ctx, cli, userCodeParentPath); err != nil {
 		mylog.Log.Error("编译代码失败, err=", err.Error())
 		return
 	}
 
-	// 运行代码
-	executeMessageList, err := RunFileInDocker(cli, containerID, inputList)
+	// 3. 运行代码
+	executeMessageList, err := RunFileInDocker(ctx, cli, userCodeParentPath, inputList)
 	if err != nil {
 		mylog.Log.Error("运行可执行文件失败, err=", err.Error())
 		return
@@ -84,9 +76,9 @@ func (this DockerController) Do() {
 	// 4. 整理结果
 	executeCodeResponse := GetOutputResponse(executeMessageList)
 
-	// 5. 清理容器和文件
-	if err := CleanContainerAndDeleteFile(cli, containerID, userCodePath); err != nil {
-		mylog.Log.Error("清理容器和文件错误, err=", err.Error())
+	// 5. 清理文件
+	if err := DeleteFile(userCodePath); err != nil {
+		mylog.Log.Error("清理文件错误, err=", err.Error())
 		return
 	}
 
@@ -95,15 +87,88 @@ func (this DockerController) Do() {
 
 }
 
-// 创建并启动Docker容器：使用Docker客户端创建并启动一个Docker容器，该容器用于编译和运行Go代码。需要指定容器的镜像、卷、工作目录等信息。
-func CreateAndStartContainer(cli *client.Client, userCodeParentPath string) (string, error) {
-	ctx := context.Background()
-	// 创建一个随机的容器名
-	containerName := fmt.Sprintf("my-go-container-%s", uuid.New().String())
+// 编译代码
+func CompileFileInDocker(ctx context.Context, cli *client.Client, userCodeParentPath string) error {
+	containerID, err := CreateContainerCfgOfDefault(ctx, cli, "golang:1.20.8-alpine", userCodeParentPath)
+	if err != nil {
+		return err
+	}
+	defer mydocker.StopAndRemoveContainer(ctx, cli, containerID)
 
-	// 设置容器的配置
+	command := "go build -o main /app/main.go"
+
+	execResult, err := mydocker.ExecuteInContainer(ctx, cli, containerID, command)
+	if err != nil {
+		mylog.Log.Error("编译失败, err=", err.Error())
+		return err
+	}
+
+	// 获取内存
+	memory, err := mydocker.GetContainerMemoryUsage(ctx, cli, containerID)
+	if err != nil {
+		mylog.Log.Error("获取编译内存失败, err=", err)
+	}
+	mylog.Log.WithFields(logrus.Fields{
+		"内存":     memory,
+		"耗时":     execResult.Tm,
+		"StdOut": execResult.StdOut,
+		"StdErr": execResult.StdErr,
+	}).Info("编译-资源消耗统计")
+	return nil
+}
+
+// 运行代码
+func RunFileInDocker(ctx context.Context, cli *client.Client, userCodeParentPath string, inputList []string) (executeMessageList []model.ExecuteMessage, err error) {
+	containerID, err := CreateContainerCfgOfRunExec(ctx, cli, "alpine:latest", userCodeParentPath)
+	if err != nil {
+		return
+	}
+	defer mydocker.StopAndRemoveContainer(ctx, cli, containerID)
+
+	for i, input := range inputList {
+
+		command := "./main " + strings.TrimSpace(input)
+
+		// 根据每条输入用例，运行代码，拿到输出结果
+		execResult, err := mydocker.ExecuteInContainer(ctx, cli, containerID, command)
+		if err != nil {
+			mylog.Log.Errorf("运行用户代码,输入示例[%d]失败,err=%s", i, err.Error())
+			return executeMessageList, err
+		}
+		mylog.Log.WithFields(logrus.Fields{
+			"耗时":     execResult.Tm,
+			"StdOut": execResult.StdOut,
+			"StdErr": execResult.StdErr,
+		}).Infof("运行用例[%v]-资源和输出-统计", i)
+
+		// 运行用户代码，存在错误输出
+		if utils.IsNotBlank(execResult.StdErr) {
+			errMsg := fmt.Sprintf("运行用户代码,输入示例[%d]失败,存在错误输出,StdErr=%s", i, execResult.StdErr)
+			mylog.Log.Error(errMsg)
+			return executeMessageList, errors.New(errMsg)
+		}
+
+		// 获取内存
+		memory, err := mydocker.GetContainerMemoryUsage(ctx, cli, containerID)
+		if err != nil {
+			mylog.Log.Errorf("运行用户代码,输入示例[%d],获取内存失败,err=%s", i, err.Error())
+			return executeMessageList, err
+		}
+		mylog.Log.Infof("运行用例[%v]-资源消耗-内存[%v]", i, memory)
+
+		executeMessageList = append(executeMessageList, model.ExecuteMessage{
+			Message: execResult.StdOut,
+			Time:    execResult.Tm,
+			Memory:  int64(memory),
+		})
+	}
+	return executeMessageList, nil
+}
+
+// 创建执行用户代码的容器（有资源限制：内存、运行时间、CPU）
+func CreateContainerCfgOfRunExec(ctx context.Context, cli *client.Client, image string, userCodeParentPath string) (containerID string, err error) {
 	containerConfig := &container.Config{
-		Image:        "golang:1.20.8-alpine", // Go编译环境的镜像
+		Image:        image,
 		Tty:          true,
 		AttachStdout: true,
 		AttachStderr: true,
@@ -114,96 +179,43 @@ func CreateAndStartContainer(cli *client.Client, userCodeParentPath string) (str
 	codeVolume := fmt.Sprintf("%s:/app", userCodeParentPath)
 
 	containerHostConfig := &container.HostConfig{
-		Binds:   []string{codeVolume},
-		ShmSize: 1000,
-		Runtime: "",
+		Binds: []string{codeVolume}, //此容器的卷绑定列表
+		Resources: container.Resources{
+			Memory: 7 * 1024 * 1024, //内存限制（字节）
+			// CPUShares: 1,                 //CPU份额（相对于其他容器的相对重量）
+		},
 	}
 
-	// 创建容器
-	resp, err := cli.ContainerCreate(
-		ctx,
-		containerConfig,
-		containerHostConfig,
-		nil,
-		nil,
-		containerName,
-	)
-	if err != nil {
-		mylog.Log.Error("创建容器失败, err=", err.Error())
-		// panic(err)
-		return "", err
-	}
+	// 创建一个随机的容器名
+	containerName := fmt.Sprintf("my-container-runexec-%s", uuid.New().String())
 
-	// 启动容器
-	if err := cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
-		mylog.Log.Error("启动容器失败, err=", err.Error())
-		return "", err
-	}
-
-	return resp.ID, nil
+	return mydocker.CreateAndStartContainer(ctx, cli, containerConfig, containerHostConfig, nil, nil, containerName)
 }
 
-// 编译代码
-func CompileFileInDocker(cli *client.Client, containerID string) error {
-	command := "go build -o main /app/main.go"
-	output, err := mydocker.ExecuteInContainer(cli, containerID, command)
-	if err != nil {
-		mylog.Log.Error("编译失败, err=", err.Error())
-		return err
-	}
-	mylog.Log.Info("编译成功, output=", string(output))
-	return nil
-}
+// 创建默认配置的容器
+func CreateContainerCfgOfDefault(ctx context.Context, cli *client.Client, image string, userCodeParentPath string) (containerID string, err error) {
 
-// 运行代码
-func RunFileInDocker(cli *client.Client, containerID string, inputList []string) ([]model.ExecuteMessage, error) {
-	var executeMessageList []model.ExecuteMessage
-	for _, input := range inputList {
-		command := "./main " + strings.TrimSpace(input)
-
-		startTime := time.Now()
-
-		output, err := mydocker.ExecuteInContainer(cli, containerID, command)
-
-		latencyTm := time.Since(startTime).Milliseconds()
-
-		if err != nil {
-			executeMessageList = append(executeMessageList, model.ExecuteMessage{
-				ErrorMessage: err.Error(),
-				Time:         latencyTm,
-			})
-			return executeMessageList, err
-		}
-		executeMessageList = append(executeMessageList, model.ExecuteMessage{
-			Message: string(output),
-			Time:    latencyTm,
-		})
-	}
-	return executeMessageList, nil
-}
-
-// 清理容器：在使用完Docker容器后，清理容器，以释放资源。
-func CleanContainerAndDeleteFile(cli *client.Client, containerID, userCodePath string) error {
-	ctx := context.Background()
-	errMsg := ""
-	// 停止容器
-	if err := cli.ContainerStop(ctx, containerID, container.StopOptions{}); err != nil {
-		errMsg += err.Error()
+	// 设置容器的配置
+	containerConfig := &container.Config{
+		Image:        image,
+		Tty:          true,
+		AttachStdout: true,
+		AttachStderr: true,
+		WorkingDir:   "/app", // 设置工作目录，可以根据需要修改
 	}
 
-	// 删除容器
-	if err := cli.ContainerRemove(ctx, containerID, types.ContainerRemoveOptions{
-		RemoveVolumes: true, Force: true,
-	}); err != nil {
-		errMsg += err.Error()
+	// 设置容器的卷，用于共享代码和编译结果
+	codeVolume := fmt.Sprintf("%s:/app", userCodeParentPath)
+
+	containerHostConfig := &container.HostConfig{
+		Binds:     []string{codeVolume}, //此容器的卷绑定列表
+		Resources: container.Resources{
+			// CPUShares: 1, //CPU份额（相对于其他容器的相对重量）
+		},
 	}
 
-	// 删除宿主机文件
-	if err := os.RemoveAll(filepath.Dir(userCodePath)); err != nil {
-		errMsg += err.Error()
-	}
-	if utils.IsEmpty(errMsg) {
-		return nil
-	}
-	return errors.New(errMsg)
+	// 创建一个随机的容器名
+	containerName := fmt.Sprintf("my-container-default-%s", uuid.New().String())
+
+	return mydocker.CreateAndStartContainer(ctx, cli, containerConfig, containerHostConfig, nil, nil, containerName)
 }

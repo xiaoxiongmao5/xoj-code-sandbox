@@ -2,21 +2,30 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-04 20:03:09
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-04 22:02:26
+ * @LastEditTime: 2023-10-07 23:10:03
  */
 package mydocker
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mylog"
+	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/utils"
 )
 
 var Cli *client.Client
@@ -37,28 +46,77 @@ func CreateDockerClient() (*client.Client, error) {
 	return cli, nil
 }
 
-// 下载golang镜像
-func PullGolangImage(cli *client.Client) error {
-	ctx := context.Background()
-	reader, err := cli.ImagePull(ctx, "golang:1.20.8-alpine", types.ImagePullOptions{})
+// 下载镜像
+func PullGolangImage(ctx context.Context, cli *client.Client, image string) error {
+	tmPullStart := time.Now()
+	reader, err := cli.ImagePull(ctx, image, types.ImagePullOptions{})
+	tmPull := time.Since(tmPullStart).Milliseconds()
 	if err != nil {
-		mylog.Log.Info("下载golang镜像失败, err=", err.Error())
+		mylog.Log.Infof("下载[%s]镜像失败, err=%v", image, err.Error())
 		return err
 	}
 	io.Copy(os.Stdout, reader)
+
+	mylog.Log.WithFields(logrus.Fields{
+		"下载镜像耗时": tmPull,
+		"镜像":     image,
+	}).Info("Docker-下载镜像-统计")
 	return nil
+}
+
+// 创建并启动Docker容器：使用Docker客户端创建并启动一个Docker容器。需要指定容器的镜像、卷、工作目录等信息。
+func CreateAndStartContainer(ctx context.Context, cli *client.Client, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *v1.Platform, containerName string) (containerID string, err error) {
+	// 创建容器
+	tmCreateStart := time.Now()
+	resp, err := cli.ContainerCreate(
+		ctx,
+		config,
+		hostConfig,
+		networkingConfig,
+		platform,
+		containerName,
+	)
+
+	tmCreate := time.Since(tmCreateStart).Milliseconds()
+	if err != nil {
+		mylog.Log.Error("创建容器失败, err=", err.Error())
+		return "", err
+	}
+	containerID = resp.ID
+
+	// 启动容器
+	tmStartStart := time.Now()
+	err = cli.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
+	tmStart := time.Since(tmStartStart).Milliseconds()
+	if err != nil {
+		mylog.Log.Error("启动容器失败, err=", err.Error())
+		return "", err
+	}
+
+	mylog.Log.WithFields(logrus.Fields{
+		"创建容器耗时": tmCreate,
+		"启动容器耗时": tmStart,
+		"容器ID":   containerID,
+	}).Info("Docker-创建启动-统计")
+
+	return containerID, nil
+}
+
+type ExecResult struct {
+	StdOut   string
+	StdErr   string
+	ExitCode int
+	Tm       int64
 }
 
 // 在Docker容器内执行命令：使用 cli.ContainerExecCreate 和 cli.ContainerExecStart 函数在Docker容器内执行编译和运行Go代码的命令。
 // command := "go build -o main /app/main.go"
-func ExecuteInContainer(cli *client.Client, containerID string, command string) ([]byte, error) {
-	ctx := context.Background()
-
+func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID string, command string) (execResult ExecResult, err error) {
 	command = strings.TrimSpace(command)
 	commandParts := strings.Split(command, " ")
 
 	// 创建一个在容器内执行的命令
-	timeExecCreateStart := time.Now()
+	tmExecCreateStart := time.Now()
 	createResp, err := cli.ContainerExecCreate(
 		ctx,
 		containerID,
@@ -70,59 +128,152 @@ func ExecuteInContainer(cli *client.Client, containerID string, command string) 
 			Cmd:          commandParts,
 		},
 	)
-	timeExecCreate := time.Since(timeExecCreateStart).Milliseconds()
+	tmExecCreate := time.Since(tmExecCreateStart).Milliseconds()
 	if err != nil {
 		mylog.Log.Error("创建在容器内执行的命令失败, err=", err.Error())
-		return nil, err
+		return
 	}
 
 	// 等待命令执行完成并获取输出
-	timeExecAttachStart := time.Now()
-	execResp, err := cli.ContainerExecAttach(ctx, createResp.ID, types.ExecStartCheck{})
-	timeExecAttach := time.Since(timeExecAttachStart).Milliseconds()
+	tmExecAttachStart := time.Now()
+	resp, err := cli.ContainerExecAttach(ctx, createResp.ID, types.ExecStartCheck{})
+	tmExecAttach := time.Since(tmExecAttachStart).Milliseconds()
+	execResult.Tm = tmExecAttach
 	if err != nil {
 		mylog.Log.Error("等待命令执行完成并获取输出失败, err=", err.Error())
-		return nil, err
+		return
 	}
-	defer execResp.Close()
+	defer resp.Close()
 
-	timeIOReadStart := time.Now()
-	output, err := io.ReadAll(execResp.Reader)
-	timeIORead := time.Since(timeIOReadStart).Milliseconds()
+	tmIOReadStart := time.Now()
+	// read the output
+	var outBuf, errBuf bytes.Buffer
+
+	_, err = stdcopy.StdCopy(&outBuf, &errBuf, resp.Reader)
+
+	stdout, err := io.ReadAll(&outBuf)
+	if err != nil {
+		mylog.Log.Error("读取[Exec]执行的[outBuf]失败,err=", err.Error())
+		return
+	}
+	execResult.StdOut = string(stdout)
+	stderr, err := io.ReadAll(&errBuf)
+	if err != nil {
+		mylog.Log.Error("读取[Exec]执行的[errBuf]失败,err=", err.Error())
+		return
+	}
+	execResult.StdErr = string(stderr)
+
+	containerExecInspect, err := cli.ContainerExecInspect(ctx, createResp.ID)
+	if err != nil {
+		mylog.Log.Error("获取[Exec]执行信息失败,err=", err.Error())
+		return
+	}
+	execResult.ExitCode = containerExecInspect.ExitCode
+	if !utils.CheckSame[int]("检查[Exec]执行的退出码是否为0", containerExecInspect.ExitCode, 0) {
+		mylog.Log.Info("运行进程的StdOut=", execResult.StdOut)
+		errMsg := fmt.Sprintf("运行进程的退出码为[%d], 错误输出为[%s]", containerExecInspect.ExitCode, execResult.StdErr)
+		mylog.Log.Error(errMsg)
+		err = errors.New(errMsg)
+		return
+	}
+
+	// scanner := bufio.NewScanner(resp.Reader)
+	// var outputLines []string
+	// for scanner.Scan() {
+	// 	// 逐行读取输出并将每一行的内容存储在 outputLines 切片中
+	// 	line := scanner.Text()
+	// 	outputLines = append(outputLines, line)
+	// }
+	// if err = scanner.Err(); err != nil {
+	// 	mylog.Log.Error("获取输出中的错误内容err=", err.Error())
+	// 	return
+	// }
+	// output = strings.Join(outputLines, "\n")
+	// outputArr, err := io.ReadAll(resp.Reader)
+
+	tmIORead := time.Since(tmIOReadStart).Milliseconds()
 	if err != nil {
 		mylog.Log.Error("获取输出中的错误内容err=", err.Error())
-		return nil, err
+		return
 	}
 
 	mylog.Log.WithFields(logrus.Fields{
-		"timeExecCreate": timeExecCreate,
-		"timeExecAttach": timeExecAttach,
-		"timeIORead":     timeIORead,
-	}).Info("Docker容器内执行命令-耗时统计")
+		"创建执行命令耗时":  tmExecCreate,
+		"命令执行完成耗时":  tmExecAttach,
+		"读取控制台输出耗时": tmIORead,
+	}).Info("Docker-运行命令-统计")
 
-	return output, nil
+	return execResult, nil
+}
 
-	// timeGetContainerLogsStart := time.Now()
-	// var stdout bytes.Buffer
-	// var stderr bytes.Buffer
-	// out, err := cli.ContainerLogs(ctx, containerID, types.ContainerLogsOptions{
-	// 	ShowStdout: true, ShowStderr: true, Timestamps: true,
-	// })
-	// timeGetContainerLogs := time.Since(timeGetContainerLogsStart).Milliseconds()
-	// if err != nil {
-	// 	mylog.Log.Error("cli.ContainerLogs 错误, err=", err.Error())
-	// 	return nil, err
-	// }
-	// timeStdCopyStart := time.Now()
-	// stdcopy.StdCopy(&stdout, &stderr, out)
-	// timeStdCopy := time.Since(timeStdCopyStart).Milliseconds()
+// 清理容器：在使用完Docker容器后，清理容器，以释放资源。
+func StopAndRemoveContainer(ctx context.Context, cli *client.Client, containerID string) error {
+	errMsg := ""
+	// 停止容器
+	tmStopStart := time.Now()
+	err := cli.ContainerStop(ctx, containerID, container.StopOptions{})
+	tmStop := time.Since(tmStopStart).Milliseconds()
+	if err != nil {
+		errMsg += err.Error()
+	}
 
-	// mylog.Log.WithFields(logrus.Fields{
-	// 	"timeExecCreate": timeExecCreate,
-	// 	"timeExecAttach": timeExecAttach,
-	// 	"timeGetContainerLogs": timeGetContainerLogs,
-	// 	"timeStdCopy":          timeStdCopy,
-	// }).Info("Docker容器内执行命令-耗时统计")
+	// 删除容器
+	tmRemoveStart := time.Now()
+	err = cli.ContainerRemove(ctx, containerID, types.ContainerRemoveOptions{
+		RemoveVolumes: true, Force: true,
+	})
+	tmRemove := time.Since(tmRemoveStart).Milliseconds()
+	if err != nil {
+		errMsg += err.Error()
+	}
 
-	// return []byte(stdout.String()), errors.New(stderr.String())
+	mylog.Log.WithFields(logrus.Fields{
+		"停止容器耗时": tmStop,
+		"删除容器耗时": tmRemove,
+		"容器ID":   containerID,
+	}).Info("Docker-停止删除-统计")
+
+	if utils.IsEmpty(errMsg) {
+		return nil
+	}
+
+	mylog.Log.Infof("容器[%s]清理失败", containerID)
+
+	return errors.New(errMsg)
+}
+
+// 获取内存消耗
+func GetContainerMemoryUsage(ctx context.Context, cli *client.Client, containerID string) (float64, error) {
+	// ContainerStats返回给定容器的近乎实时的统计信息。这取决于caller关闭io.ReadCloser返回。
+	// 查询容器的统计数据（stats）
+	tmGetStatStart := time.Now()
+	stats, err := cli.ContainerStats(ctx, containerID, false)
+	tmGetStat := time.Since(tmGetStatStart).Milliseconds()
+	if err != nil {
+		mylog.Log.Error("查询容器的统计数据失败, err=", err.Error())
+		return 0.0, err
+	}
+	defer stats.Body.Close()
+
+	// 解析统计数据中的内存使用信息
+	var memUsage types.StatsJSON
+	if err := json.NewDecoder(stats.Body).Decode(&memUsage); err != nil {
+		mylog.Log.Error("解析统计数据中的内存使用信息失败, err=", err.Error())
+		return 0.0, err
+	}
+
+	// 获取内存使用信息（以字节为单位）
+	memoryUsage := float64(memUsage.MemoryStats.Usage)
+
+	// 如果需要，你可以将内存使用信息转换为其他单位，例如MB或GB
+	// memoryUsageInMB := memoryUsage / (1024 * 1024)
+
+	mylog.Log.WithFields(logrus.Fields{
+		"获取容器内存耗时":     tmGetStat,
+		"容器内存消耗(byte)": memoryUsage,
+		"容器ID":         containerID,
+	}).Info("Docker-获取内存-统计")
+
+	return memoryUsage, nil
 }

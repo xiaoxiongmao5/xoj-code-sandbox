@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-03 19:42:49
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-04 20:30:12
+ * @LastEditTime: 2023-10-04 22:27:26
  * @FilePath: /xoj-code-sandbox/controllers/Check.go
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -269,6 +269,7 @@ func GetOutputResponse(executeMessageList []model.ExecuteMessage) model.ExecuteC
 	var outputList []string
 	// 取用时最大值，便于判断是否超时
 	var maxTime int64
+	var maxMemory int64
 
 	for _, executeMessage := range executeMessageList {
 		errorMessage := executeMessage.ErrorMessage
@@ -280,6 +281,7 @@ func GetOutputResponse(executeMessageList []model.ExecuteMessage) model.ExecuteC
 		}
 		outputList = append(outputList, executeMessage.Message)
 		maxTime = int64(math.Max(float64(maxTime), float64(executeMessage.Time)))
+		maxMemory = int64(math.Max(float64(maxMemory), float64(executeMessage.Memory)))
 	}
 
 	// 正常运行完成
@@ -289,9 +291,9 @@ func GetOutputResponse(executeMessageList []model.ExecuteMessage) model.ExecuteC
 
 	executeCodeResponse.OutputList = outputList
 
-	// 要借助第三方库来获取内存占用，非常麻烦，此处不做实现
 	executeCodeResponse.JudgeInfo = model.JudgeInfo{
-		Time: maxTime,
+		Time:   maxTime,
+		Memory: maxMemory,
 	}
 
 	return executeCodeResponse
