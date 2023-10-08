@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-04 20:03:09
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-07 23:10:03
+ * @LastEditTime: 2023-10-08 11:09:54
  */
 package mydocker
 
@@ -24,6 +24,7 @@ import (
 	"github.com/docker/docker/pkg/stdcopy"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
+	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/model"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mylog"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/utils"
 )
@@ -102,16 +103,9 @@ func CreateAndStartContainer(ctx context.Context, cli *client.Client, config *co
 	return containerID, nil
 }
 
-type ExecResult struct {
-	StdOut   string
-	StdErr   string
-	ExitCode int
-	Tm       int64
-}
-
 // 在Docker容器内执行命令：使用 cli.ContainerExecCreate 和 cli.ContainerExecStart 函数在Docker容器内执行编译和运行Go代码的命令。
 // command := "go build -o main /app/main.go"
-func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID string, command string) (execResult ExecResult, err error) {
+func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID string, command string) (execResult model.ExecResult, err error) {
 	command = strings.TrimSpace(command)
 	commandParts := strings.Split(command, " ")
 
@@ -138,7 +132,7 @@ func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID str
 	tmExecAttachStart := time.Now()
 	resp, err := cli.ContainerExecAttach(ctx, createResp.ID, types.ExecStartCheck{})
 	tmExecAttach := time.Since(tmExecAttachStart).Milliseconds()
-	execResult.Tm = tmExecAttach
+	execResult.Time = tmExecAttach
 	if err != nil {
 		mylog.Log.Error("等待命令执行完成并获取输出失败, err=", err.Error())
 		return
@@ -148,23 +142,25 @@ func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID str
 	tmIOReadStart := time.Now()
 	// read the output
 	var outBuf, errBuf bytes.Buffer
-
 	_, err = stdcopy.StdCopy(&outBuf, &errBuf, resp.Reader)
-
 	stdout, err := io.ReadAll(&outBuf)
+	execResult.StdOut = string(stdout)
 	if err != nil {
 		mylog.Log.Error("读取[Exec]执行的[outBuf]失败,err=", err.Error())
 		return
 	}
-	execResult.StdOut = string(stdout)
 	stderr, err := io.ReadAll(&errBuf)
+	execResult.StdErr = string(stderr)
 	if err != nil {
 		mylog.Log.Error("读取[Exec]执行的[errBuf]失败,err=", err.Error())
 		return
 	}
-	execResult.StdErr = string(stderr)
+	tmIORead := time.Since(tmIOReadStart).Milliseconds()
 
+	// 获取exec执行信息
+	tmGetExecInspectStart := time.Now()
 	containerExecInspect, err := cli.ContainerExecInspect(ctx, createResp.ID)
+	tmGetExecInspect := time.Since(tmGetExecInspectStart).Milliseconds()
 	if err != nil {
 		mylog.Log.Error("获取[Exec]执行信息失败,err=", err.Error())
 		return
@@ -175,6 +171,14 @@ func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID str
 		errMsg := fmt.Sprintf("运行进程的退出码为[%d], 错误输出为[%s]", containerExecInspect.ExitCode, execResult.StdErr)
 		mylog.Log.Error(errMsg)
 		err = errors.New(errMsg)
+		return
+	}
+
+	// 获取内存
+	memory, err := GetContainerMemoryUsage(ctx, cli, containerID)
+	execResult.Memory = int64(memory)
+	if err != nil {
+		mylog.Log.Error("获取内存失败,err=", err.Error())
 		return
 	}
 
@@ -192,17 +196,12 @@ func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID str
 	// output = strings.Join(outputLines, "\n")
 	// outputArr, err := io.ReadAll(resp.Reader)
 
-	tmIORead := time.Since(tmIOReadStart).Milliseconds()
-	if err != nil {
-		mylog.Log.Error("获取输出中的错误内容err=", err.Error())
-		return
-	}
-
 	mylog.Log.WithFields(logrus.Fields{
-		"创建执行命令耗时":  tmExecCreate,
-		"命令执行完成耗时":  tmExecAttach,
-		"读取控制台输出耗时": tmIORead,
-	}).Info("Docker-运行命令-统计")
+		"创建exec":          tmExecCreate,
+		"运行exec":          tmExecAttach,
+		"读取stdout、stderr": tmIORead,
+		"获取exec执行信息":      tmGetExecInspect,
+	}).Info("Docker-运行命令-耗时统计")
 
 	return execResult, nil
 }

@@ -1,3 +1,9 @@
+/*
+ * @Author: 小熊 627516430@qq.com
+ * @Date: 2023-10-01 17:34:58
+ * @LastEditors: 小熊 627516430@qq.com
+ * @LastEditTime: 2023-10-08 13:57:11
+ */
 package myresq
 
 import "strconv"
@@ -35,6 +41,10 @@ const (
 	USER_PASSWORD_ERROR
 )
 
+const (
+	EXECUTE_CODE_ERROR RespCode = iota + 4000
+)
+
 // 错误消息映射
 
 var respCodeMessages = map[RespCode]string{
@@ -52,4 +62,5 @@ var respCodeMessages = map[RespCode]string{
 	USER_EXIST:          "用户已存在",
 	CREATE_USER_FAILED:  "账号创建失败",
 	USER_PASSWORD_ERROR: "账号密码错误",
+	EXECUTE_CODE_ERROR:  "代码执行错误",
 }
