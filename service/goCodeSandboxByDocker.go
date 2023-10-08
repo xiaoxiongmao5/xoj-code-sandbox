@@ -2,11 +2,9 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:37:18
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-08 14:07:05
- * @FilePath: /xoj-code-sandbox/service/codeSandboxByDocker/codeSandboxByDocker.go
- * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ * @LastEditTime: 2023-10-08 16:12:14
  */
-package gocodesandboxbydocker
+package service
 
 import (
 	"context"
@@ -21,7 +19,7 @@ import (
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/model"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mydocker"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mylog"
-	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/service"
+	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/service/commonservice"
 )
 
 const (
@@ -39,7 +37,7 @@ type GoCodeSandboxByDocker struct {
 
 // 1. 把用户的代码保存为文件
 func (this GoCodeSandboxByDocker) SaveCodeToFile(code string) (string, error) {
-	return service.SaveCodeToFile(code)
+	return commonservice.SaveCodeToFile(code)
 }
 
 // 2. 编译代码
@@ -117,12 +115,12 @@ func (this GoCodeSandboxByDocker) RunFile(userCodePath string, inputList []strin
 
 // 4. 获取输出结果
 func (this GoCodeSandboxByDocker) GetOutputResponse(execResultList []model.ExecResult) model.ExecuteCodeResponse {
-	return service.GetOutputResponse(execResultList)
+	return commonservice.GetOutputResponse(execResultList)
 }
 
 // 5. 删除文件
 func (this GoCodeSandboxByDocker) DeleteFile(userCodePath string) error {
-	return service.DeleteFile(userCodePath)
+	return commonservice.DeleteFile(userCodePath)
 }
 
 // 创建执行用户代码的容器（有资源限制：内存、运行时间、CPU）
@@ -141,7 +139,7 @@ func (this GoCodeSandboxByDocker) CreateContainerCfgOfRunExec(cli *client.Client
 	containerHostConfig := &container.HostConfig{
 		Binds: []string{codeVolume}, //此容器的卷绑定列表
 		Resources: container.Resources{
-			Memory: service.MEMORY_LIMIT, //内存限制（字节）
+			Memory: commonservice.MEMORY_LIMIT, //内存限制（字节）
 			// CPUShares: 1,                 //CPU份额（相对于其他容器的相对重量）
 		},
 	}

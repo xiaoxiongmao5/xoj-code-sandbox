@@ -2,11 +2,9 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:34:56
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-08 13:53:54
- * @FilePath: /xoj-code-sandbox/service/codeSandboxByNative/codeSandboxByNative.go
- * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ * @LastEditTime: 2023-10-08 16:13:21
  */
-package gocodesandboxbynative
+package service
 
 import (
 	"errors"
@@ -20,7 +18,7 @@ import (
 
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/model"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mylog"
-	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/service"
+	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/service/commonservice"
 )
 
 const (
@@ -32,7 +30,7 @@ type GoCodeSandboxByNative struct {
 
 // 1. 把用户的代码保存为文件
 func (this GoCodeSandboxByNative) SaveCodeToFile(code string) (string, error) {
-	return service.SaveCodeToFile(code)
+	return commonservice.SaveCodeToFile(code)
 }
 
 // 2. 编译代码
@@ -42,9 +40,9 @@ func (this GoCodeSandboxByNative) CompileFile(userCodePath string) error {
 	// 构建编译命令
 	var compileCmd string
 	if runtime.GOOS == WINDOWS {
-		compileCmd = fmt.Sprintf("go build -o %s\\%s.exe %s", userCodeParentPath, service.GLOBAL_GO_BINARY_NAME, userCodePath)
+		compileCmd = fmt.Sprintf("go build -o %s\\%s.exe %s", userCodeParentPath, commonservice.GLOBAL_GO_BINARY_NAME, userCodePath)
 	} else {
-		compileCmd = fmt.Sprintf("go build -o %s/%s %s", userCodeParentPath, service.GLOBAL_GO_BINARY_NAME, userCodePath)
+		compileCmd = fmt.Sprintf("go build -o %s/%s %s", userCodeParentPath, commonservice.GLOBAL_GO_BINARY_NAME, userCodePath)
 	}
 
 	// TrimSpace返回字符串s的一个片段，去掉所有前导和尾随空格
@@ -69,13 +67,13 @@ func (this GoCodeSandboxByNative) CompileFile(userCodePath string) error {
 	}()
 
 	select {
-	case <-time.After(service.TIME_OUT):
+	case <-time.After(commonservice.TIME_OUT):
 		// 超时
 		compileProcess.Process.Kill()
-		return errors.New(service.COMPILE_TIMEOUT_ERROR)
+		return errors.New(commonservice.COMPILE_TIMEOUT_ERROR)
 	case err := <-done:
 		if err != nil {
-			mylog.Log.Errorf("%v : err= %v", service.COMPILE_ERROR, err.Error())
+			mylog.Log.Errorf("%v : err= %v", commonservice.COMPILE_ERROR, err.Error())
 			return err
 		}
 	}
@@ -89,9 +87,9 @@ func (this GoCodeSandboxByNative) RunFile(userCodePath string, inputList []strin
 	// 运行编译后的可执行文件
 	var runCmd string
 	if runtime.GOOS == WINDOWS {
-		runCmd = fmt.Sprintf("%s\\%s.exe", userCodeParentPath, service.GLOBAL_GO_BINARY_NAME)
+		runCmd = fmt.Sprintf("%s\\%s.exe", userCodeParentPath, commonservice.GLOBAL_GO_BINARY_NAME)
 	} else {
-		runCmd = fmt.Sprintf("%s/%s", userCodeParentPath, service.GLOBAL_GO_BINARY_NAME)
+		runCmd = fmt.Sprintf("%s/%s", userCodeParentPath, commonservice.GLOBAL_GO_BINARY_NAME)
 	}
 
 	runCmd = strings.TrimSpace(runCmd)
@@ -113,7 +111,7 @@ func (this GoCodeSandboxByNative) RunFile(userCodePath string, inputList []strin
 		if err != nil {
 			if strings.Contains(err.Error(), "signal: killed") {
 				execResultList = append(execResultList, model.ExecResult{
-					StdErr: service.RUN_TIMEOUT_ERROR,
+					StdErr: commonservice.RUN_TIMEOUT_ERROR,
 					Time:   latencyTm,
 				})
 				return execResultList, err
@@ -136,10 +134,10 @@ func (this GoCodeSandboxByNative) RunFile(userCodePath string, inputList []strin
 
 // 4. 获取输出结果
 func (this GoCodeSandboxByNative) GetOutputResponse(execResultList []model.ExecResult) model.ExecuteCodeResponse {
-	return service.GetOutputResponse(execResultList)
+	return commonservice.GetOutputResponse(execResultList)
 }
 
 // 5. 删除文件
 func (this GoCodeSandboxByNative) DeleteFile(userCodePath string) error {
-	return service.DeleteFile(userCodePath)
+	return commonservice.DeleteFile(userCodePath)
 }

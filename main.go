@@ -3,7 +3,6 @@ package main
 import (
 	"net/http"
 
-	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/config"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mydocker"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mylog"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/myresq"
@@ -31,18 +30,15 @@ func main() {
 	defer mylog.Log.Writer().Close()
 	defer mydocker.Cli.Close()
 
-	// 启动配置文件加载协程
-	go config.LoadAppDynamicConfigCycle()
-
 	if beego.BConfig.RunMode == "dev" {
 		beego.BConfig.WebConfig.DirectoryIndex = true
 		beego.BConfig.WebConfig.StaticDir["/swagger"] = "swagger"
 
-		// 开启监控：Admin 管理后台
-		beego.BConfig.Listen.EnableAdmin = true
-		// 修改监听的地址和端口：
-		beego.BConfig.Listen.AdminAddr = "localhost"
-		beego.BConfig.Listen.AdminPort = 8089
+		// // 开启监控：Admin 管理后台
+		// beego.BConfig.Listen.EnableAdmin = true
+		// // 修改监听的地址和端口：
+		// beego.BConfig.Listen.AdminAddr = "localhost"
+		// beego.BConfig.Listen.AdminPort = 8089
 	}
 
 	// 全局异常捕获
