@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:34:56
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-08 16:33:38
+ * @LastEditTime: 2023-10-09 21:12:04
  */
 package service
 
@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/model"
+	codeexecstatusenum "github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/model/enums/CodeExecStatusEnum"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mylog"
 	commonservice "github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/service/commonService"
 )
@@ -70,10 +71,10 @@ func (this GoCodeSandboxByNative) CompileFile(userCodePath string) error {
 	case <-time.After(commonservice.TIME_OUT):
 		// 超时
 		compileProcess.Process.Kill()
-		return errors.New(commonservice.COMPILE_TIMEOUT_ERROR)
+		return errors.New(codeexecstatusenum.COMPILE_TIMEOUT_ERROR.GetText()) //编译超时
 	case err := <-done:
 		if err != nil {
-			mylog.Log.Errorf("%v : err= %v", commonservice.COMPILE_ERROR, err.Error())
+			mylog.Log.Errorf("%v : err= %v", codeexecstatusenum.COMPILE_FAIL.GetText(), err.Error()) //编译失败
 			return err
 		}
 	}
@@ -111,7 +112,7 @@ func (this GoCodeSandboxByNative) RunFile(userCodePath string, inputList []strin
 		if err != nil {
 			if strings.Contains(err.Error(), "signal: killed") {
 				execResultList = append(execResultList, model.ExecResult{
-					StdErr: commonservice.RUN_TIMEOUT_ERROR,
+					StdErr: codeexecstatusenum.RUN_TIMEOUT_ERROR.GetText(), //运行超时
 					Time:   latencyTm,
 				})
 				return execResultList, err

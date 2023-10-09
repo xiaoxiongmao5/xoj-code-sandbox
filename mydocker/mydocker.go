@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-04 20:03:09
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-08 11:09:54
+ * @LastEditTime: 2023-10-09 20:43:07
  */
 package mydocker
 
@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -176,7 +177,7 @@ func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID str
 
 	// 获取内存
 	memory, err := GetContainerMemoryUsage(ctx, cli, containerID)
-	execResult.Memory = int64(memory)
+	execResult.Memory = int64(math.Ceil(memory)) //向上取整
 	if err != nil {
 		mylog.Log.Error("获取内存失败,err=", err.Error())
 		return
@@ -263,16 +264,18 @@ func GetContainerMemoryUsage(ctx context.Context, cli *client.Client, containerI
 	}
 
 	// 获取内存使用信息（以字节为单位）
-	memoryUsage := float64(memUsage.MemoryStats.Usage)
+	// memoryUsage := float64(memUsage.MemoryStats.Usage)	//内存的当前res_counter使用情况
+	memoryUsage := float64(memUsage.MemoryStats.MaxUsage) //有记录以来的最大使用量
 
 	// 如果需要，你可以将内存使用信息转换为其他单位，例如MB或GB
 	// memoryUsageInMB := memoryUsage / (1024 * 1024)
+	memoryUsageInKB := memoryUsage / 1024
 
 	mylog.Log.WithFields(logrus.Fields{
-		"获取容器内存耗时":     tmGetStat,
-		"容器内存消耗(byte)": memoryUsage,
-		"容器ID":         containerID,
+		"获取容器内存耗时":   tmGetStat,
+		"容器内存消耗(KB)": memoryUsageInKB,
+		"容器ID":       containerID,
 	}).Info("Docker-获取内存-统计")
 
-	return memoryUsage, nil
+	return memoryUsageInKB, nil
 }

@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:37:18
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-09 17:12:16
+ * @LastEditTime: 2023-10-09 20:40:17
  */
 package service
 
@@ -62,8 +62,8 @@ func (this GoCodeSandboxByDocker) CompileFile(userCodePath string) error {
 	}
 
 	mylog.Log.WithFields(logrus.Fields{
-		"内存":     execResult.Memory,
-		"耗时":     execResult.Time,
+		"内存KB":   execResult.Memory,
+		"耗时MS":   execResult.Time,
 		"StdOut": execResult.StdOut,
 		"StdErr": execResult.StdErr,
 	}).Info("编译-资源消耗统计")
@@ -94,8 +94,8 @@ func (this GoCodeSandboxByDocker) RunFile(userCodePath string, inputList []strin
 			return execResultList, err
 		}
 		mylog.Log.WithFields(logrus.Fields{
-			"耗时":     execResult.Time,
-			"内存":     execResult.Memory,
+			"内存KB":   execResult.Memory,
+			"耗时MS":   execResult.Time,
 			"StdOut": execResult.StdOut,
 			"StdErr": execResult.StdErr,
 		}).Infof("运行用例[%v]-资源和输出-统计", i)
