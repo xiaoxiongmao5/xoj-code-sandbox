@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:37:18
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-08 16:12:14
+ * @LastEditTime: 2023-10-09 17:12:16
  */
 package service
 
@@ -19,7 +19,7 @@ import (
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/model"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mydocker"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mylog"
-	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/service/commonservice"
+	commonservice "github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/service/commonService"
 )
 
 const (
@@ -78,7 +78,7 @@ func (this GoCodeSandboxByDocker) RunFile(userCodePath string, inputList []strin
 	// 创建并启动容器
 	containerID, err := this.CreateContainerCfgOfRunExec(this.Cli, RUN_GO_IMAGE, userCodeParentPath)
 	if err != nil {
-		return
+		return execResultList, err
 	}
 	// defer 关闭并删除容器
 	defer mydocker.StopAndRemoveContainer(this.Ctx, this.Cli, containerID)

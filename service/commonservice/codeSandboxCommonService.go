@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:33:07
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-08 16:11:46
+ * @LastEditTime: 2023-10-09 17:09:26
  * @FilePath: /xoj-code-sandbox/service/codeSandboxCommon.go
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -30,11 +30,13 @@ const (
 	COMPILE_TIMEOUT_ERROR  = "编译超时"
 	RUN_TIMEOUT_ERROR      = "运行超时"
 	RUN_ERROR              = "运行错误"
+	RUN_COMPLETE           = "正常运行完成"
 	COMPILE_ERROR          = "编译错误"
 	CODE_SAND_BOX_ERROR    = "代码沙箱错误"
 	EXECUTION_SUCCESS      = 1 //正常运行完成
-	EXECUTION_COMPILE_FAIL = 2
+	EXECUTION_COMPILE_FAIL = 2 //编译失败
 	EXECUTION_RUNTIME_FAIL = 3 //用户提交的代码执行中存在错误
+	EXECUTION_SYSTEM_ERROR = 4 //系统错误
 )
 
 // 1. 把用户的代码保存为文件
@@ -97,6 +99,7 @@ func GetOutputResponse(execResultList []model.ExecResult) model.ExecuteCodeRespo
 
 	// 正常运行完成
 	if utils.CheckSame[int]("判断outputList和executeMessageList长度一致", len(outputList), len(execResultList)) {
+		executeCodeResponse.Message = RUN_COMPLETE
 		executeCodeResponse.Status = EXECUTION_SUCCESS
 	}
 

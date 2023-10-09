@@ -35,3 +35,13 @@ func Success(ctx *context.Context, data interface{}) {
 	ctx.Input.SetData("json", jsondata)
 	ctx.Abort(200, "")
 }
+
+func AbortWithData(ctx *context.Context, code RespCode, msg string, data interface{}) {
+	message := code.GetMessage()
+	if msg != "" {
+		message = msg
+	}
+	jsondata := NewBaseResponse(code, message, data)
+	ctx.Input.SetData("json", jsondata)
+	ctx.Abort(200, "")
+}

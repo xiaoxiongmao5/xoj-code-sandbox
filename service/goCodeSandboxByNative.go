@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:34:56
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-08 16:13:21
+ * @LastEditTime: 2023-10-08 16:33:38
  */
 package service
 
@@ -18,7 +18,7 @@ import (
 
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/model"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mylog"
-	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/service/commonservice"
+	commonservice "github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/service/commonService"
 )
 
 const (
