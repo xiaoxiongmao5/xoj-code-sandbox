@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:37:18
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-09 20:40:17
+ * @LastEditTime: 2023-10-10 20:59:14
  */
 package service
 
@@ -62,7 +62,7 @@ func (this GoCodeSandboxByDocker) CompileFile(userCodePath string) error {
 	}
 
 	mylog.Log.WithFields(logrus.Fields{
-		"内存KB":   execResult.Memory,
+		"内存byte": execResult.Memory,
 		"耗时MS":   execResult.Time,
 		"StdOut": execResult.StdOut,
 		"StdErr": execResult.StdErr,
@@ -94,7 +94,7 @@ func (this GoCodeSandboxByDocker) RunFile(userCodePath string, inputList []strin
 			return execResultList, err
 		}
 		mylog.Log.WithFields(logrus.Fields{
-			"内存KB":   execResult.Memory,
+			"内存byte": execResult.Memory,
 			"耗时MS":   execResult.Time,
 			"StdOut": execResult.StdOut,
 			"StdErr": execResult.StdErr,

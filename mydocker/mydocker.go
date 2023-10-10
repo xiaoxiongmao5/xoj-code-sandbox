@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-04 20:03:09
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-09 20:43:07
+ * @LastEditTime: 2023-10-10 20:58:30
  */
 package mydocker
 
@@ -269,13 +269,13 @@ func GetContainerMemoryUsage(ctx context.Context, cli *client.Client, containerI
 
 	// 如果需要，你可以将内存使用信息转换为其他单位，例如MB或GB
 	// memoryUsageInMB := memoryUsage / (1024 * 1024)
-	memoryUsageInKB := memoryUsage / 1024
+	// memoryUsageInKB := memoryUsage / 1024
 
 	mylog.Log.WithFields(logrus.Fields{
-		"获取容器内存耗时":   tmGetStat,
-		"容器内存消耗(KB)": memoryUsageInKB,
-		"容器ID":       containerID,
+		"获取容器内存耗时":     tmGetStat,
+		"容器内存消耗(byte)": memoryUsage,
+		"容器ID":         containerID,
 	}).Info("Docker-获取内存-统计")
 
-	return memoryUsageInKB, nil
+	return memoryUsage, nil
 }
