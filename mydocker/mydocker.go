@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-04 20:03:09
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-10 20:58:30
+ * @LastEditTime: 2023-10-11 21:58:50
  */
 package mydocker
 
@@ -27,6 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/model"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mylog"
+	commonservice "github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/service/commonService"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/utils"
 )
 
@@ -50,16 +51,17 @@ func CreateDockerClient() (*client.Client, error) {
 
 // 下载镜像
 func PullGolangImage(ctx context.Context, cli *client.Client, image string) error {
+	var tmPull int64
 	tmPullStart := time.Now()
 	reader, err := cli.ImagePull(ctx, image, types.ImagePullOptions{})
-	tmPull := time.Since(tmPullStart).Milliseconds()
+	tmPull = time.Since(tmPullStart).Milliseconds()
 	if err != nil {
 		mylog.Log.Infof("下载[%s]镜像失败, err=%v", image, err.Error())
 		return err
 	}
 	io.Copy(os.Stdout, reader)
 
-	mylog.Log.WithFields(logrus.Fields{
+	defer mylog.Log.WithFields(logrus.Fields{
 		"下载镜像耗时": tmPull,
 		"镜像":     image,
 	}).Info("Docker-下载镜像-统计")
@@ -68,6 +70,8 @@ func PullGolangImage(ctx context.Context, cli *client.Client, image string) erro
 
 // 创建并启动Docker容器：使用Docker客户端创建并启动一个Docker容器。需要指定容器的镜像、卷、工作目录等信息。
 func CreateAndStartContainer(ctx context.Context, cli *client.Client, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *v1.Platform, containerName string) (containerID string, err error) {
+	var tmCreate, tmStart int64
+
 	// 创建容器
 	tmCreateStart := time.Now()
 	resp, err := cli.ContainerCreate(
@@ -79,7 +83,7 @@ func CreateAndStartContainer(ctx context.Context, cli *client.Client, config *co
 		containerName,
 	)
 
-	tmCreate := time.Since(tmCreateStart).Milliseconds()
+	tmCreate = time.Since(tmCreateStart).Milliseconds()
 	if err != nil {
 		mylog.Log.Error("创建容器失败, err=", err.Error())
 		return "", err
@@ -89,13 +93,13 @@ func CreateAndStartContainer(ctx context.Context, cli *client.Client, config *co
 	// 启动容器
 	tmStartStart := time.Now()
 	err = cli.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
-	tmStart := time.Since(tmStartStart).Milliseconds()
+	tmStart = time.Since(tmStartStart).Milliseconds()
 	if err != nil {
 		mylog.Log.Error("启动容器失败, err=", err.Error())
 		return "", err
 	}
 
-	mylog.Log.WithFields(logrus.Fields{
+	defer mylog.Log.WithFields(logrus.Fields{
 		"创建容器耗时": tmCreate,
 		"启动容器耗时": tmStart,
 		"容器ID":   containerID,
@@ -104,9 +108,17 @@ func CreateAndStartContainer(ctx context.Context, cli *client.Client, config *co
 	return containerID, nil
 }
 
+var (
+	ErrTimeOut    = errors.New("超时错误")
+	MemoryFullOut = errors.New("内存溢出错误")
+)
+
 // 在Docker容器内执行命令：使用 cli.ContainerExecCreate 和 cli.ContainerExecStart 函数在Docker容器内执行编译和运行Go代码的命令。
 // command := "go build -o main /app/main.go"
-func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID string, command string) (execResult model.ExecResult, err error) {
+func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID string, command string) (model.ExecResult, error) {
+	var tmExecCreate, tmExecAttach, tmIORead, tmGetExecInspect int64
+	var execResult model.ExecResult
+
 	command = strings.TrimSpace(command)
 	commandParts := strings.Split(command, " ")
 
@@ -123,48 +135,64 @@ func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID str
 			Cmd:          commandParts,
 		},
 	)
-	tmExecCreate := time.Since(tmExecCreateStart).Milliseconds()
+	tmExecCreate = time.Since(tmExecCreateStart).Milliseconds()
 	if err != nil {
 		mylog.Log.Error("创建在容器内执行的命令失败, err=", err.Error())
-		return
+		return execResult, err
 	}
 
 	// 等待命令执行完成并获取输出
 	tmExecAttachStart := time.Now()
 	resp, err := cli.ContainerExecAttach(ctx, createResp.ID, types.ExecStartCheck{})
-	tmExecAttach := time.Since(tmExecAttachStart).Milliseconds()
-	execResult.Time = tmExecAttach
+	tmExecAttach = time.Since(tmExecAttachStart).Milliseconds()
 	if err != nil {
 		mylog.Log.Error("等待命令执行完成并获取输出失败, err=", err.Error())
-		return
+		return execResult, err
 	}
 	defer resp.Close()
 
-	tmIOReadStart := time.Now()
-	// read the output
-	var outBuf, errBuf bytes.Buffer
-	_, err = stdcopy.StdCopy(&outBuf, &errBuf, resp.Reader)
-	stdout, err := io.ReadAll(&outBuf)
-	execResult.StdOut = string(stdout)
-	if err != nil {
-		mylog.Log.Error("读取[Exec]执行的[outBuf]失败,err=", err.Error())
-		return
+	done := make(chan error, 1)
+	go func() {
+		tmIOReadStart := time.Now()
+		// read the output
+		var outBuf, errBuf bytes.Buffer
+		_, err = stdcopy.StdCopy(&outBuf, &errBuf, resp.Reader)
+		stdout, err := io.ReadAll(&outBuf)
+		execResult.StdOut = string(stdout)
+		if err != nil {
+			mylog.Log.Error("读取[Exec]执行的[outBuf]失败,err=", err.Error())
+			done <- err
+			return
+		}
+		stderr, err := io.ReadAll(&errBuf)
+		execResult.StdErr = string(stderr)
+		if err != nil {
+			mylog.Log.Error("读取[Exec]执行的[errBuf]失败,err=", err.Error())
+			done <- err
+			return
+		}
+		tmIORead = time.Since(tmIOReadStart).Milliseconds()
+		execResult.Time = tmIORead
+		done <- nil
+	}()
+
+	select {
+	case <-time.After(commonservice.TIME_OUT):
+		mylog.Log.Errorf("[Exec]执行超时了[限制是 %v]~~~", commonservice.TIME_OUT)
+		return execResult, model.ErrTimeOut{Message: "超时"} //exec 超时
+	case err = <-done:
+		if err != nil {
+			return execResult, err
+		}
 	}
-	stderr, err := io.ReadAll(&errBuf)
-	execResult.StdErr = string(stderr)
-	if err != nil {
-		mylog.Log.Error("读取[Exec]执行的[errBuf]失败,err=", err.Error())
-		return
-	}
-	tmIORead := time.Since(tmIOReadStart).Milliseconds()
 
 	// 获取exec执行信息
 	tmGetExecInspectStart := time.Now()
 	containerExecInspect, err := cli.ContainerExecInspect(ctx, createResp.ID)
-	tmGetExecInspect := time.Since(tmGetExecInspectStart).Milliseconds()
+	tmGetExecInspect = time.Since(tmGetExecInspectStart).Milliseconds()
 	if err != nil {
 		mylog.Log.Error("获取[Exec]执行信息失败,err=", err.Error())
-		return
+		return execResult, err
 	}
 	execResult.ExitCode = containerExecInspect.ExitCode
 	if !utils.CheckSame[int]("检查[Exec]执行的退出码是否为0", containerExecInspect.ExitCode, 0) {
@@ -172,7 +200,7 @@ func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID str
 		errMsg := fmt.Sprintf("运行进程的退出码为[%d], 错误输出为[%s]", containerExecInspect.ExitCode, execResult.StdErr)
 		mylog.Log.Error(errMsg)
 		err = errors.New(errMsg)
-		return
+		return execResult, err
 	}
 
 	// 获取内存
@@ -180,7 +208,7 @@ func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID str
 	execResult.Memory = int64(math.Ceil(memory)) //向上取整
 	if err != nil {
 		mylog.Log.Error("获取内存失败,err=", err.Error())
-		return
+		return execResult, err
 	}
 
 	// scanner := bufio.NewScanner(resp.Reader)
@@ -197,7 +225,7 @@ func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID str
 	// output = strings.Join(outputLines, "\n")
 	// outputArr, err := io.ReadAll(resp.Reader)
 
-	mylog.Log.WithFields(logrus.Fields{
+	defer mylog.Log.WithFields(logrus.Fields{
 		"创建exec":          tmExecCreate,
 		"运行exec":          tmExecAttach,
 		"读取stdout、stderr": tmIORead,
@@ -209,11 +237,13 @@ func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID str
 
 // 清理容器：在使用完Docker容器后，清理容器，以释放资源。
 func StopAndRemoveContainer(ctx context.Context, cli *client.Client, containerID string) error {
+	var tmStop, tmRemove int64
+
 	errMsg := ""
 	// 停止容器
 	tmStopStart := time.Now()
 	err := cli.ContainerStop(ctx, containerID, container.StopOptions{})
-	tmStop := time.Since(tmStopStart).Milliseconds()
+	tmStop = time.Since(tmStopStart).Milliseconds()
 	if err != nil {
 		errMsg += err.Error()
 	}
@@ -223,12 +253,12 @@ func StopAndRemoveContainer(ctx context.Context, cli *client.Client, containerID
 	err = cli.ContainerRemove(ctx, containerID, types.ContainerRemoveOptions{
 		RemoveVolumes: true, Force: true,
 	})
-	tmRemove := time.Since(tmRemoveStart).Milliseconds()
+	tmRemove = time.Since(tmRemoveStart).Milliseconds()
 	if err != nil {
 		errMsg += err.Error()
 	}
 
-	mylog.Log.WithFields(logrus.Fields{
+	defer mylog.Log.WithFields(logrus.Fields{
 		"停止容器耗时": tmStop,
 		"删除容器耗时": tmRemove,
 		"容器ID":   containerID,
@@ -245,11 +275,14 @@ func StopAndRemoveContainer(ctx context.Context, cli *client.Client, containerID
 
 // 获取内存消耗
 func GetContainerMemoryUsage(ctx context.Context, cli *client.Client, containerID string) (float64, error) {
+	var tmGetStat int64
+	var memoryUsage float64
+
 	// ContainerStats返回给定容器的近乎实时的统计信息。这取决于caller关闭io.ReadCloser返回。
 	// 查询容器的统计数据（stats）
 	tmGetStatStart := time.Now()
 	stats, err := cli.ContainerStats(ctx, containerID, false)
-	tmGetStat := time.Since(tmGetStatStart).Milliseconds()
+	tmGetStat = time.Since(tmGetStatStart).Milliseconds()
 	if err != nil {
 		mylog.Log.Error("查询容器的统计数据失败, err=", err.Error())
 		return 0.0, err
@@ -265,13 +298,13 @@ func GetContainerMemoryUsage(ctx context.Context, cli *client.Client, containerI
 
 	// 获取内存使用信息（以字节为单位）
 	// memoryUsage := float64(memUsage.MemoryStats.Usage)	//内存的当前res_counter使用情况
-	memoryUsage := float64(memUsage.MemoryStats.MaxUsage) //有记录以来的最大使用量
+	memoryUsage = float64(memUsage.MemoryStats.MaxUsage) //有记录以来的最大使用量
 
 	// 如果需要，你可以将内存使用信息转换为其他单位，例如MB或GB
 	// memoryUsageInMB := memoryUsage / (1024 * 1024)
 	// memoryUsageInKB := memoryUsage / 1024
 
-	mylog.Log.WithFields(logrus.Fields{
+	defer mylog.Log.WithFields(logrus.Fields{
 		"获取容器内存耗时":     tmGetStat,
 		"容器内存消耗(byte)": memoryUsage,
 		"容器ID":         containerID,

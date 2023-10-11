@@ -2,12 +2,11 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:34:56
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-09 21:12:04
+ * @LastEditTime: 2023-10-11 21:15:19
  */
 package service
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -69,9 +68,8 @@ func (this GoCodeSandboxByNative) CompileFile(userCodePath string) error {
 
 	select {
 	case <-time.After(commonservice.TIME_OUT):
-		// 超时
 		compileProcess.Process.Kill()
-		return errors.New(codeexecstatusenum.COMPILE_TIMEOUT_ERROR.GetText()) //编译超时
+		return &model.ErrTimeOut{} //编译超时
 	case err := <-done:
 		if err != nil {
 			mylog.Log.Errorf("%v : err= %v", codeexecstatusenum.COMPILE_FAIL.GetText(), err.Error()) //编译失败
@@ -97,38 +95,26 @@ func (this GoCodeSandboxByNative) RunFile(userCodePath string, inputList []strin
 
 	var execResultList []model.ExecResult
 
-	for _, input := range inputList {
+	for i, input := range inputList {
 		inputParst := strings.Split(strings.TrimSpace(input), " ")
 		runProcess := exec.Command(runCmd, inputParst...)
 		// runProcess.Stdin = strings.NewReader(input)
 
 		startTime := time.Now()
-
 		// CombinedOutput运行该命令并返回其组合的标准输出和标准错误。
 		output, err := runProcess.CombinedOutput()
-
 		latencyTm := time.Since(startTime).Milliseconds()
 
+		execResult := model.ExecResult{Time: latencyTm}
 		if err != nil {
 			if strings.Contains(err.Error(), "signal: killed") {
-				execResultList = append(execResultList, model.ExecResult{
-					StdErr: codeexecstatusenum.RUN_TIMEOUT_ERROR.GetText(), //运行超时
-					Time:   latencyTm,
-				})
-				return execResultList, err
-			} else {
-				execResultList = append(execResultList, model.ExecResult{
-					StdErr: err.Error(),
-					Time:   latencyTm,
-				})
-				return execResultList, err
+				return execResultList, &model.ErrTimeOut{} //运行超时
 			}
-		} else {
-			execResultList = append(execResultList, model.ExecResult{
-				StdOut: string(output),
-				Time:   latencyTm,
-			})
+			mylog.Log.Errorf("运行用户代码,输入示例[%d]失败,err=%s", i, err.Error())
+			return execResultList, err
 		}
+		execResult.StdOut = string(output)
+		execResultList = append(execResultList, execResult)
 	}
 	return execResultList, nil
 }

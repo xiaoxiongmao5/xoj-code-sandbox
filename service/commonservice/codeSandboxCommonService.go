@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:33:07
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-09 21:12:24
+ * @LastEditTime: 2023-10-11 22:05:04
  * @FilePath: /xoj-code-sandbox/service/codeSandboxCommon.go
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -26,7 +26,7 @@ const (
 	GLOBAL_CODE_DIR_NAME  = "tmpcode"
 	GLOBAL_GO_FILE_NAME   = "main.go"
 	GLOBAL_GO_BINARY_NAME = "main"
-	TIME_OUT              = 5 * time.Second
+	TIME_OUT              = 10 * time.Second
 	MEMORY_LIMIT          = 6 * 1024 * 1024 //内存限制（字节）(docker容器要求最低位6M)
 )
 

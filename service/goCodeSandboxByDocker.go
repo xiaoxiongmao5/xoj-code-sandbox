@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:37:18
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-10 20:59:14
+ * @LastEditTime: 2023-10-11 22:01:49
  */
 package service
 
@@ -57,7 +57,6 @@ func (this GoCodeSandboxByDocker) CompileFile(userCodePath string) error {
 	// 编译代码
 	execResult, err := mydocker.ExecuteInContainer(this.Ctx, this.Cli, containerID, command)
 	if err != nil {
-		mylog.Log.Error("编译失败, err=", err.Error())
 		return err
 	}
 
