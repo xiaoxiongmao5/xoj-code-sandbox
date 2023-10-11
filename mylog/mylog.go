@@ -2,13 +2,12 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-09-27 14:46:54
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-03 19:34:02
+ * @LastEditTime: 2023-10-11 22:35:48
  */
 package mylog
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
@@ -73,7 +72,7 @@ func SetupLogger() (*logrus.Logger, error) {
 	}
 
 	mylog.SetOutput(logWriter)
-	mylog.SetOutput(os.Stdout)
+	// mylog.SetOutput(os.Stdout)
 	mylog.SetFormatter(&logrus.JSONFormatter{
 		TimestampFormat: "2006-01-02 15:04:05",
 	})
