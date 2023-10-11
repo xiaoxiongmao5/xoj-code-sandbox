@@ -1,15 +1,19 @@
+/*
+ * @Author: 小熊 627516430@qq.com
+ * @Date: 2023-10-09 20:24:21
+ * @LastEditors: 小熊 627516430@qq.com
+ * @LastEditTime: 2023-10-11 17:01:56
+ * @FilePath: /xoj-code-sandbox/main.go
+ */
 package main
 
 import (
-	"net/http"
-
+	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/middleware"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mydocker"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mylog"
-	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/myresq"
 	_ "github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/routers"
 
 	beego "github.com/beego/beego/v2/server/web"
-	"github.com/beego/beego/v2/server/web/context"
 )
 
 func init() {
@@ -43,22 +47,7 @@ func main() {
 
 	// 全局异常捕获
 	beego.BConfig.RecoverPanic = true
-	beego.BConfig.RecoverFunc = func(ctx *context.Context, config *beego.Config) {
-		if err := recover(); err != nil {
-			mylog.Log.Errorf("beego.BConfig.RecoverFunc err= %v \n", err)
-
-			// 从 Context 中获取错误码和消息
-			response, ok := ctx.Input.GetData("json").(*myresq.BaseResponse)
-			if !ok {
-				response = myresq.NewBaseResponse(500, "未知错误", nil)
-			}
-
-			// 将 JSON 响应写入 Context，并设置响应头
-			ctx.Output.Header("Content-Type", "application/json; charset=utf-8")
-			ctx.Output.SetStatus(http.StatusOK)
-			ctx.Output.JSON(response, false, false)
-		}
-	}
+	beego.BConfig.RecoverFunc = middleware.ExceptionHandingMiddleware
 
 	beego.Run()
 }

@@ -1,0 +1,9 @@
+doc/
+log/
+api.rest
+swagger/
+xoj-code-sandbox
+README.md
+test/
+tests/
+tmpcode/

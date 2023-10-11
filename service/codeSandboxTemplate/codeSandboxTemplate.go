@@ -2,9 +2,9 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:22:12
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-09 21:05:34
+ * @LastEditTime: 2023-10-11 16:32:39
  * @FilePath: /xoj-code-sandbox/service/CodeSandboxTemplate.go
- * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ * @Description: 代码沙箱-模版方法
  */
 package codesandboxtemplate
 
@@ -40,6 +40,8 @@ func CodeSandboxTemplate(c CodeSandboxInterface, param model.ExecuteCodeRequest)
 		return executeCodeResponse, err
 	}
 
+	defer c.DeleteFile(userCodePath)
+
 	err = c.CompileFile(userCodePath)
 	if err != nil {
 		mylog.Log.Errorf("编译失败,但不影响成功的返回沙箱执行结果[err=%s]", err.Error())
@@ -59,12 +61,6 @@ func CodeSandboxTemplate(c CodeSandboxInterface, param model.ExecuteCodeRequest)
 	}
 
 	executeCodeResponse = c.GetOutputResponse(execResultList)
-
-	err = c.DeleteFile(userCodePath)
-	if err != nil {
-		mylog.Log.Errorf("清理文件失败,但不影响成功的返回沙箱执行结果,[userCodePath=%s] [err=%s]", userCodePath, err.Error())
-		return executeCodeResponse, nil
-	}
 
 	return executeCodeResponse, nil
 }

@@ -2,9 +2,8 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 13:10:34
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-09 19:15:38
+ * @LastEditTime: 2023-10-11 17:08:18
  * @FilePath: /xoj-code-sandbox/controllers/controller.go
- * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
 package controllers
 
@@ -42,9 +41,10 @@ func (this MainController) ExecuteCode() {
 		Ctx: context.Background(),
 		Cli: mydocker.Cli,
 	}
-	// goCodeSandboxByNative := service.GoCodeSandboxByNative{}
-
 	executeCodeResponse, err := codesandboxtemplate.CodeSandboxTemplate(goCodeSandboxByDocker, params)
+
+	// goCodeSandboxByNative := service.GoCodeSandboxByNative{}
+	// executeCodeResponse, err := codesandboxtemplate.CodeSandboxTemplate(goCodeSandboxByNative, params)
 	if err != nil {
 		myresq.AbortWithData(this.Ctx, myresq.EXECUTE_CODE_ERROR, err.Error(), executeCodeResponse)
 		return

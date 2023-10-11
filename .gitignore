@@ -1,3 +1,8 @@
-resoureces/*
-tmpcode/*
 doc/*
+log/*
+api*.rest
+swagger/*
+xoj-code-sandbox
+test/*
+tests/*
+tmpcode/*

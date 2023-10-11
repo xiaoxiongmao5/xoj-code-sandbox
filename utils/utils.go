@@ -51,3 +51,10 @@ func GetDomainFromReferer(referer string) (string, error) {
 
 	return parsedURL.Hostname(), nil
 }
+
+func GetRequestIp(reqIp string) string {
+	if reqIp == "::1" {
+		reqIp = "127.0.0.1"
+	}
+	return reqIp
+}
