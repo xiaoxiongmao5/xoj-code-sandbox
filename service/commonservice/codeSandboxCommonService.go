@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:33:07
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-11 22:05:04
+ * @LastEditTime: 2023-10-15 19:03:45
  * @FilePath: /xoj-code-sandbox/service/codeSandboxCommon.go
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -78,7 +78,7 @@ func GetOutputResponse(execResultList []model.ExecResult) model.ExecuteCodeRespo
 	for _, execResult := range execResultList {
 		stdErr := execResult.StdErr
 		if utils.IsNotBlank(stdErr) {
-			executeCodeResponse.Message = codeexecstatusenum.RUN_FAIL.GetText() + ", err: " + stdErr
+			executeCodeResponse.Message = codeexecstatusenum.RUN_FAIL.GetText() + " : " + stdErr
 			// 用户提交的代码执行中存在错误
 			executeCodeResponse.Status = codeexecstatusenum.RUN_FAIL.GetValue()
 			break

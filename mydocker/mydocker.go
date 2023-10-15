@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-04 20:03:09
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-11 21:58:50
+ * @LastEditTime: 2023-10-15 20:21:17
  */
 package mydocker
 
@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"math"
 	"os"
@@ -196,10 +195,8 @@ func ExecuteInContainer(ctx context.Context, cli *client.Client, containerID str
 	}
 	execResult.ExitCode = containerExecInspect.ExitCode
 	if !utils.CheckSame[int]("检查[Exec]执行的退出码是否为0", containerExecInspect.ExitCode, 0) {
-		mylog.Log.Info("运行进程的StdOut=", execResult.StdOut)
-		errMsg := fmt.Sprintf("运行进程的退出码为[%d], 错误输出为[%s]", containerExecInspect.ExitCode, execResult.StdErr)
-		mylog.Log.Error(errMsg)
-		err = errors.New(errMsg)
+		mylog.Log.Errorf("运行进程的退出码=[%d], StdErr=[%s], StdOut=[%s]", containerExecInspect.ExitCode, execResult.StdErr, execResult.StdOut)
+		err = errors.New(execResult.StdErr)
 		return execResult, err
 	}
 

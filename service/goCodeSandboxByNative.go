@@ -2,11 +2,12 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:34:56
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-11 21:15:19
+ * @LastEditTime: 2023-10-15 21:50:28
  */
 package service
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,6 +24,8 @@ import (
 
 const (
 	WINDOWS = "windows"
+	Linux   = "linux"
+	Mac     = "darwin"
 )
 
 type GoCodeSandboxByNative struct {
@@ -34,16 +37,20 @@ func (this GoCodeSandboxByNative) SaveCodeToFile(code string) (string, error) {
 }
 
 // 2. 编译代码
-func (this GoCodeSandboxByNative) CompileFile(userCodePath string) error {
+func (this GoCodeSandboxByNative) CompileFile_old(userCodePath string) error {
 	userCodeParentPath := filepath.Dir(userCodePath)
+
+	sysType := runtime.GOOS  //目标操作系统
+	cpus := runtime.NumCPU() //当前系统的 CPU 核数量
+	mylog.Log.Infof("sysType=[%s], cpus=[%v]", sysType, cpus)
 
 	// 构建编译命令
 	var compileCmd string
-	if runtime.GOOS == WINDOWS {
-		compileCmd = fmt.Sprintf("go build -o %s\\%s.exe %s", userCodeParentPath, commonservice.GLOBAL_GO_BINARY_NAME, userCodePath)
-	} else {
-		compileCmd = fmt.Sprintf("go build -o %s/%s %s", userCodeParentPath, commonservice.GLOBAL_GO_BINARY_NAME, userCodePath)
+	if sysType == WINDOWS {
+		// compileCmd = fmt.Sprintf("go build -o %s\\%s.exe %s", userCodeParentPath, commonservice.GLOBAL_GO_BINARY_NAME, userCodePath)
+		return errors.New("不支持Windows系统")
 	}
+	compileCmd = fmt.Sprintf("go build -o %s/%s %s", userCodeParentPath, commonservice.GLOBAL_GO_BINARY_NAME, userCodePath)
 
 	// TrimSpace返回字符串s的一个片段，去掉所有前导和尾随空格
 	compileCmd = strings.TrimSpace(compileCmd)
@@ -51,6 +58,9 @@ func (this GoCodeSandboxByNative) CompileFile(userCodePath string) error {
 
 	// 编译代码
 	compileProcess := exec.Command(compileCmdParts[0], compileCmdParts[1:]...)
+	if sysType == Mac {
+		compileProcess.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64")
+	}
 	compileProcess.Stderr = os.Stderr
 	compileProcess.Stdout = os.Stdout
 
@@ -79,21 +89,76 @@ func (this GoCodeSandboxByNative) CompileFile(userCodePath string) error {
 	return nil
 }
 
+func (this GoCodeSandboxByNative) CompileFile(userCodePath string) error {
+	userCodeParentPath := filepath.Dir(userCodePath)
+
+	sysType := runtime.GOOS  //目标操作系统
+	cpus := runtime.NumCPU() //当前系统的 CPU 核数量
+	mylog.Log.Infof("sysType=[%s], cpus=[%v]", sysType, cpus)
+
+	// 构建编译命令
+	var compileCmd string
+	if sysType == WINDOWS {
+		return errors.New("不支持Windows系统")
+	}
+	compileCmd = fmt.Sprintf("go build -o %s/%s %s", userCodeParentPath, commonservice.GLOBAL_GO_BINARY_NAME, userCodePath)
+
+	// TrimSpace返回字符串s的一个片段，去掉所有前导和尾随空格
+	compileCmd = strings.TrimSpace(compileCmd)
+	compileCmdParts := strings.Split(compileCmd, " ")
+
+	// 编译代码
+	compileProcess := exec.Command(compileCmdParts[0], compileCmdParts[1:]...)
+	if sysType == Mac {
+		compileProcess.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64")
+	}
+
+	// 等待编译完成或超时
+	done := make(chan error, 1)
+	var output []byte
+	var err error
+	go func() {
+		output, err = compileProcess.CombinedOutput()
+		if err != nil {
+			if strings.Contains(err.Error(), "signal: killed") {
+				done <- &model.ErrTimeOut{} //编译超时
+			}
+			done <- err
+		}
+		mylog.Log.Info("编译输出: ", string(output))
+		done <- nil
+	}()
+
+	select {
+	case <-time.After(commonservice.TIME_OUT):
+		compileProcess.Process.Kill()
+		return &model.ErrTimeOut{} //编译超时
+	case err := <-done:
+		if err != nil {
+			errmsg := fmt.Sprintf("%s. %s", err.Error(), string(output))
+			mylog.Log.Errorf("%v : err= %v", codeexecstatusenum.COMPILE_FAIL.GetText(), errmsg) //编译失败
+			return errors.New(errmsg)
+		}
+	}
+	return nil
+}
+
 // 3. 运行编译后的可执行文件, 获得执行结果列表
 func (this GoCodeSandboxByNative) RunFile(userCodePath string, inputList []string) ([]model.ExecResult, error) {
+	var execResultList []model.ExecResult
+
 	userCodeParentPath := filepath.Dir(userCodePath)
 
 	// 运行编译后的可执行文件
 	var runCmd string
 	if runtime.GOOS == WINDOWS {
-		runCmd = fmt.Sprintf("%s\\%s.exe", userCodeParentPath, commonservice.GLOBAL_GO_BINARY_NAME)
+		// runCmd = fmt.Sprintf("%s\\%s.exe", userCodeParentPath, commonservice.GLOBAL_GO_BINARY_NAME)
+		return execResultList, errors.New("不支持Windows系统")
 	} else {
 		runCmd = fmt.Sprintf("%s/%s", userCodeParentPath, commonservice.GLOBAL_GO_BINARY_NAME)
 	}
 
 	runCmd = strings.TrimSpace(runCmd)
-
-	var execResultList []model.ExecResult
 
 	for i, input := range inputList {
 		inputParst := strings.Split(strings.TrimSpace(input), " ")

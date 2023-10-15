@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 13:10:34
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-11 17:08:18
+ * @LastEditTime: 2023-10-15 19:19:27
  * @FilePath: /xoj-code-sandbox/controllers/controller.go
  */
 package controllers
@@ -11,6 +11,7 @@ import (
 	"context"
 
 	beego "github.com/beego/beego/v2/server/web"
+	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/config"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/model"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mydocker"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/myresq"
@@ -37,14 +38,32 @@ func (this MainController) ExecuteCode() {
 		return
 	}
 
-	goCodeSandboxByDocker := service.GoCodeSandboxByDocker{
-		Ctx: context.Background(),
-		Cli: mydocker.Cli,
-	}
-	executeCodeResponse, err := codesandboxtemplate.CodeSandboxTemplate(goCodeSandboxByDocker, params)
+	var executeCodeResponse model.ExecuteCodeResponse
+	var err error
+	var goCodeSandbox codesandboxtemplate.CodeSandboxInterface
 
-	// goCodeSandboxByNative := service.GoCodeSandboxByNative{}
-	// executeCodeResponse, err := codesandboxtemplate.CodeSandboxTemplate(goCodeSandboxByNative, params)
+	switch config.AppConfigDynamic.CodeSandboxType {
+	case "docker":
+		goCodeSandbox = service.GoCodeSandboxByDocker{
+			Ctx: context.Background(),
+			Cli: mydocker.Cli,
+		}
+	case "native":
+		goCodeSandbox = service.GoCodeSandboxByNative{}
+	case "dockerAndNative":
+		goCodeSandbox = service.GoCodeSandboxByDockerNative{
+			Ctx: context.Background(),
+			Cli: mydocker.Cli,
+		}
+	default:
+		goCodeSandbox = service.GoCodeSandboxByDocker{
+			Ctx: context.Background(),
+			Cli: mydocker.Cli,
+		}
+	}
+
+	executeCodeResponse, err = codesandboxtemplate.CodeSandboxTemplate(goCodeSandbox, params)
+
 	if err != nil {
 		myresq.AbortWithData(this.Ctx, myresq.EXECUTE_CODE_ERROR, err.Error(), executeCodeResponse)
 		return

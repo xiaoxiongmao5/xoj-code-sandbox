@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:22:12
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-11 21:50:45
+ * @LastEditTime: 2023-10-15 19:04:50
  * @FilePath: /xoj-code-sandbox/service/CodeSandboxTemplate.go
  * @Description: 代码沙箱-模版方法
  */
@@ -36,7 +36,7 @@ type CodeSandboxInterface interface {
 func CodeSandboxTemplate(c CodeSandboxInterface, param model.ExecuteCodeRequest) (executeCodeResponse model.ExecuteCodeResponse, err error) {
 	userCodePath, err := c.SaveCodeToFile(param.Code)
 	if err != nil {
-		executeCodeResponse.Message = codeexecstatusenum.SYSTEM_ERROR.GetText() + ", err: " + err.Error()
+		executeCodeResponse.Message = codeexecstatusenum.SYSTEM_ERROR.GetText() + " : " + err.Error()
 		// 系统错误(保存代码失败)
 		executeCodeResponse.Status = codeexecstatusenum.SYSTEM_ERROR.GetValue()
 		return executeCodeResponse, err
@@ -54,7 +54,7 @@ func CodeSandboxTemplate(c CodeSandboxInterface, param model.ExecuteCodeRequest)
 			return executeCodeResponse, err
 		}
 		mylog.Log.Error("编译失败,err=", err.Error())
-		executeCodeResponse.Message = codeexecstatusenum.COMPILE_FAIL.GetText() + ", err: " + err.Error()
+		executeCodeResponse.Message = codeexecstatusenum.COMPILE_FAIL.GetText() + " : " + err.Error()
 		executeCodeResponse.Status = codeexecstatusenum.COMPILE_FAIL.GetValue()
 		return executeCodeResponse, nil
 	}
@@ -69,7 +69,7 @@ func CodeSandboxTemplate(c CodeSandboxInterface, param model.ExecuteCodeRequest)
 			return executeCodeResponse, err
 		}
 		mylog.Log.Error("运行用户代码失败,err=", err.Error())
-		executeCodeResponse.Message = codeexecstatusenum.RUN_FAIL.GetText() + ", err: " + err.Error()
+		executeCodeResponse.Message = codeexecstatusenum.RUN_FAIL.GetText() + " : " + err.Error()
 		executeCodeResponse.Status = codeexecstatusenum.RUN_FAIL.GetValue()
 		return executeCodeResponse, nil
 	}
