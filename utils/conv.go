@@ -2,11 +2,12 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-09-27 14:46:54
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-03 19:34:32
+ * @LastEditTime: 2023-10-16 13:17:51
  */
 package utils
 
 import (
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strconv"
@@ -104,4 +105,13 @@ func CopyStructFields(src, dst interface{}) bool {
 	}
 
 	return true
+}
+
+func JsonMarshal(data interface{}, defaultStr string) (string, error) {
+	jsonStr, err := json.Marshal(data)
+	if err != nil {
+		mylog.Log.Error("json.Marshal failed, err=", err)
+		return defaultStr, err
+	}
+	return string(jsonStr), nil
 }

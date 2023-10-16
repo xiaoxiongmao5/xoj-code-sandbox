@@ -1,7 +1,15 @@
+/*
+ * @Author: 小熊 627516430@qq.com
+ * @Date: 2023-10-15 21:29:16
+ * @LastEditors: 小熊 627516430@qq.com
+ * @LastEditTime: 2023-10-16 13:20:16
+ * @FilePath: /xoj-code-sandbox/myresq/myresq.go
+ */
 package myresq
 
 import (
 	"github.com/beego/beego/v2/server/web/context"
+	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mylog"
 )
 
 // 通用返回类
@@ -21,6 +29,10 @@ func NewBaseResponse(code RespCode, message string, data interface{}) *BaseRespo
 }
 
 func Abort(ctx *context.Context, code RespCode, msg string) {
+	if ctx == nil {
+		mylog.Log.Error("Abort param ctx is nil")
+		return
+	}
 	message := code.GetMessage()
 	if msg != "" {
 		message = msg
@@ -31,12 +43,20 @@ func Abort(ctx *context.Context, code RespCode, msg string) {
 }
 
 func Success(ctx *context.Context, data interface{}) {
+	if ctx == nil {
+		mylog.Log.Error("Success param ctx is nil")
+		return
+	}
 	jsondata := NewBaseResponse(SUCCESS, SUCCESS.GetMessage(), data)
 	ctx.Input.SetData("json", jsondata)
 	ctx.Abort(200, "")
 }
 
 func AbortWithData(ctx *context.Context, code RespCode, msg string, data interface{}) {
+	if ctx == nil {
+		mylog.Log.Error("AbortWithData param ctx is nil")
+		return
+	}
 	message := code.GetMessage()
 	if msg != "" {
 		message = msg

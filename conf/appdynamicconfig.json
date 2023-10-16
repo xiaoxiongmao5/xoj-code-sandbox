@@ -7,6 +7,6 @@
         "requests_per_second": 10,
         "bucket_size": 5
     },
-    "codeSandboxType": "dockerAndNative",
+    "codeSandboxType": "docker",
     "codeSandboxTypeExample": "docker、native、dockerAndNative"
 }
