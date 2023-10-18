@@ -2,12 +2,13 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:37:18
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-11 22:01:49
+ * @LastEditTime: 2023-10-18 00:50:17
  */
 package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/model"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mydocker"
+	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/myerror"
 	"github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/mylog"
 	commonservice "github.com/xiaoxiongmao5/xoj/xoj-code-sandbox/service/commonService"
 )
@@ -49,7 +51,7 @@ func (this GoCodeSandboxByDocker) CompileFile(userCodePath string) error {
 	if err != nil {
 		return err
 	}
-	// defer 关闭并删除容器
+	// 关闭并删除容器
 	defer mydocker.StopAndRemoveContainer(this.Ctx, this.Cli, containerID)
 
 	command := COMPILE_COMMAND
@@ -57,6 +59,14 @@ func (this GoCodeSandboxByDocker) CompileFile(userCodePath string) error {
 	// 编译代码
 	execResult, err := mydocker.ExecuteInContainer(this.Ctx, this.Cli, containerID, command)
 	if err != nil {
+		var e myerror.ErrTimeOut
+		if errors.As(err, &e) {
+			err = fmt.Errorf("编译%w", err)
+		}
+		var e2 myerror.ErrMemoryFullOut
+		if errors.As(err, &e2) {
+			err = fmt.Errorf("编译代码导致%w", err)
+		}
 		return err
 	}
 
@@ -79,7 +89,7 @@ func (this GoCodeSandboxByDocker) RunFile(userCodePath string, inputList []strin
 	if err != nil {
 		return execResultList, err
 	}
-	// defer 关闭并删除容器
+	// 关闭并删除容器
 	defer mydocker.StopAndRemoveContainer(this.Ctx, this.Cli, containerID)
 
 	for i, input := range inputList {
@@ -89,7 +99,16 @@ func (this GoCodeSandboxByDocker) RunFile(userCodePath string, inputList []strin
 		// 根据每条输入用例，运行代码
 		execResult, err := mydocker.ExecuteInContainer(this.Ctx, this.Cli, containerID, command)
 		if err != nil {
+			var e myerror.ErrTimeOut
+			if errors.As(err, &e) {
+				err = fmt.Errorf("运行%w", err)
+			}
+			var e2 myerror.ErrMemoryFullOut
+			if errors.As(err, &e2) {
+				err = fmt.Errorf("运行代码导致%w", err)
+			}
 			mylog.Log.Errorf("运行用户代码,输入示例[%d]失败,err=%s", i, err.Error())
+			execResultList = append(execResultList, execResult)
 			return execResultList, err
 		}
 		mylog.Log.WithFields(logrus.Fields{

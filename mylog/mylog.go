@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-09-27 14:46:54
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-11 22:35:48
+ * @LastEditTime: 2023-10-18 10:34:43
  */
 package mylog
 
@@ -73,6 +73,7 @@ func SetupLogger() (*logrus.Logger, error) {
 
 	mylog.SetOutput(logWriter)
 	// mylog.SetOutput(os.Stdout)
+
 	mylog.SetFormatter(&logrus.JSONFormatter{
 		TimestampFormat: "2006-01-02 15:04:05",
 	})
@@ -80,5 +81,32 @@ func SetupLogger() (*logrus.Logger, error) {
 	// 	TimestampFormat: "2006-01-02 15:04:05",
 	// })
 
+	// // 创建控制台输出源
+	// consoleLogger := logrus.New()
+	// consoleLogger.Out = os.Stdout
+
+	// // 添加多个输出源
+	// mylog.AddHook(consoleLogger)
+
 	return mylog, nil
 }
+
+// type StuOutHook struct {
+// 	// 可以在这里定义你的输出源配置
+// }
+
+// func (hook *StuOutHook) Levels() []logrus.Level {
+// 	return logrus.AllLevels
+// }
+
+// func (hook *StuOutHook) Fire(entry *logrus.Entry) error {
+// 	// 在这里实现自定义的日志输出操作
+// 	// 例如，将日志写入文件、发送到远程服务器等
+// 	return nil
+// }
+
+// func SetupCustomLogger() {
+// 	logrus.AddHook(&StuOutHook{
+// 		// 在这里配置自定义输出源的参数
+// 	})
+// }

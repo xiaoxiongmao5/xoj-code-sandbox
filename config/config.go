@@ -106,7 +106,7 @@ func LoadAppConfigDynamic() (*AppConfigurationDynamic, error) {
 // 定时任务，轮询更新动态配置
 func LoadAppDynamicConfigCycle() {
 	filePath := "conf/appdynamicconfig.json"
-	ticker := time.NewTicker(3 * time.Second) // 每3秒检查一次配置文件
+	ticker := time.NewTicker(2 * time.Second) // 每3秒检查一次配置文件
 	defer ticker.Stop()
 
 	var lastModTime time.Time
@@ -134,7 +134,7 @@ func LoadAppDynamicConfigCycle() {
 			if !reflect.DeepEqual(lastConfig, newConfig) {
 				lastConfig = newConfig
 				// 在这里使用最新的配置数据进行处理
-				mylog.Log.Errorf("Loaded new config: %+v", newConfig)
+				mylog.Log.Infof("Loaded new config: %+v", newConfig)
 				AppConfigDynamic = newConfig
 			}
 			appConfigMutex.Unlock()

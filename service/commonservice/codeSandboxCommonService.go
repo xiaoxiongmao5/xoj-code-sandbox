@@ -2,7 +2,7 @@
  * @Author: 小熊 627516430@qq.com
  * @Date: 2023-10-08 11:33:07
  * @LastEditors: 小熊 627516430@qq.com
- * @LastEditTime: 2023-10-15 19:03:45
+ * @LastEditTime: 2023-10-18 00:35:59
  * @FilePath: /xoj-code-sandbox/service/codeSandboxCommon.go
  * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
  */
@@ -27,7 +27,7 @@ const (
 	GLOBAL_GO_FILE_NAME   = "main.go"
 	GLOBAL_GO_BINARY_NAME = "main"
 	TIME_OUT              = 10 * time.Second
-	MEMORY_LIMIT          = 6 * 1024 * 1024 //内存限制（字节）(docker容器要求最低位6M)
+	MEMORY_LIMIT          = 10 * 1024 * 1024 //内存限制（字节）(docker容器要求最低位6M)
 )
 
 // 1. 把用户的代码保存为文件
@@ -70,12 +70,19 @@ func SaveCodeToFile(code string) (string, error) {
 // 4. 获取输出结果
 func GetOutputResponse(execResultList []model.ExecResult) model.ExecuteCodeResponse {
 	var executeCodeResponse model.ExecuteCodeResponse
+	if utils.IsEmpty(execResultList) {
+		return executeCodeResponse
+	}
 	var outputList []string
 	// 取用时最大值，便于判断是否超时
 	var maxTime int64
 	var maxMemory int64
 
 	for _, execResult := range execResultList {
+		outputList = append(outputList, execResult.StdOut)
+		maxTime = int64(math.Max(float64(maxTime), float64(execResult.Time)))
+		maxMemory = int64(math.Max(float64(maxMemory), float64(execResult.Memory)))
+
 		stdErr := execResult.StdErr
 		if utils.IsNotBlank(stdErr) {
 			executeCodeResponse.Message = codeexecstatusenum.RUN_FAIL.GetText() + " : " + stdErr
@@ -83,9 +90,6 @@ func GetOutputResponse(execResultList []model.ExecResult) model.ExecuteCodeRespo
 			executeCodeResponse.Status = codeexecstatusenum.RUN_FAIL.GetValue()
 			break
 		}
-		outputList = append(outputList, execResult.StdOut)
-		maxTime = int64(math.Max(float64(maxTime), float64(execResult.Time)))
-		maxMemory = int64(math.Max(float64(maxMemory), float64(execResult.Memory)))
 	}
 
 	// 正常运行完成
